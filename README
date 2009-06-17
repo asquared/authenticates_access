@@ -1,0 +1,69 @@
+AuthenticatesAccess
+===================
+
+AuthenticatesAccess can be used to implement model-based authentication and
+authorization features in your application. It is based around the concept
+of "accessors", or model objects which are used as tokens to access other
+model objects. Accessors might be users, groups, or sessions. 
+AuthenticatesAccess allows the use of methods within the accessors or within
+the accessed objects to determine whether certain actions should be allowed.
+
+Example
+=======
+
+Models need to define the access restrictions which will apply:
+
+class User < ActiveRecord::Base
+  # user has an is_admin attribute
+  
+  # don't let non-admins change the is_admin attribute
+  authenticates_writes_to :is_admin, :with_accessor_method => :is_admin
+
+  # allow users to save their own profile
+  authenticates_saves :with => :allow_owner
+  def owner_id
+    id
+  end
+
+  # also, allow admins to save any user profile
+  authenticates_saves :with_accessor_method => :is_admin 
+end
+
+class Comment < ActiveRecord::Base
+  belongs_to :user
+
+  # allow users to edit their own comments (but not others)
+  has_owner :user
+  authenticates_saves :with => :allow_owner
+  # this will also allow admins to edit any comments
+  authenticates_saves :with_accessor_method => :is_admin
+end
+
+The application controller should set an accessor to be used:
+
+class ApplicationController < ActionController::Base
+  before_filter :setup_accessor
+
+  protected
+
+  def setup_accessor
+    ActiveRecord::Base.accessor = logged_in_user
+  end   
+
+  def logged_in_user
+    User.find(session[:user_id])
+  end
+end
+
+The views may use methods to determine which attributes may currently 
+be written, or whether the object may be modified at all.
+
+<% if @user.allowed_to_save(:is_admin) %> 
+<%= f.check_box :is_admin %>
+<% end %>
+
+<% if user.allowed_to_save %>
+<%= link_to 'Edit', edit_user_path(user) %>
+<% end %>
+
+Copyright (c) 2009 Andrew H. Armenia, released under the MIT license.

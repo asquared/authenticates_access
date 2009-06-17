@@ -9,6 +9,7 @@ module AuthenticatesAccess
 
     # Return the accessor being used by the model classes
     def accessor
+      @@accessor ||= nil
       @@accessor
     end
 
@@ -136,10 +137,12 @@ module AuthenticatesAccess
     end
 
     def authenticates_saves_method_list
+      @save_method_list ||= nil
       @save_method_list
     end
 
     def write_validations(attr)
+      @write_validation_map ||= nil
       if @write_validation_map
         @write_validation_map[attr]
       else
@@ -155,9 +158,9 @@ module AuthenticatesAccess
     end
 
     def bypass_auth
-      @bypass_auth = 1
+      @bypass_auth = true
       yield
-      @bypass_auth = 0
+      @bypass_auth = false
     end
 
     # Auto-set the owner id to the accessor id before save if the object is new
@@ -232,6 +235,7 @@ module AuthenticatesAccess
     def write_attribute(name, value)
       # Simply check if the accessor is allowed to write the field
       # (if so, go to superclass and do it)
+      @bypass_auth ||= false
       if allowed_to_write(name) || @bypass_auth
         super(name, value)
       end

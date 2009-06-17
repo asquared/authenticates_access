@@ -70,7 +70,7 @@ module AuthenticatesAccess
     # end
     #
     def has_owner(attr=nil)
-      unless attr.nil
+      unless attr.nil?
         if attr == :self
           # special case the self attribute but don't allow ownership change
           define_method(:owner_id) do
@@ -169,7 +169,9 @@ module AuthenticatesAccess
 
     # Run a method on the accessor if it's available, otherwise return false.
     def run_accessor_method(method)
-      if accessor.respond_to?(method)
+      if accessor.nil?
+        false
+      elsif accessor.respond_to?(method)
         accessor.send(method)
       else
         false

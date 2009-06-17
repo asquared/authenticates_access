@@ -21,6 +21,9 @@ class User < ActiveRecord::Base
 
   # allow users to save their own profile
   authenticates_saves :with => :allow_owner
+
+  # this is a bit ugly for now, but only in this one specific case
+  include AuthenticatesAccess::Ownership
   def owner_id
     id
   end

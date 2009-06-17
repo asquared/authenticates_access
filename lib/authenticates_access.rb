@@ -62,11 +62,47 @@ module AuthenticatesAccess
     # has_owner :user
     # authenticates_saves :with => :allow_owner
     #
-    def has_owner(attr)
-      define_method(:owner_id) do
-        read_attribute(attr.id)
+    # or:
+    #
+    # has_owner
+    # def owner_id
+    #   id
+    # end
+    #
+    def has_owner(attr=nil)
+      unless attr.nil
+        if attr == :self
+          # special case the self attribute but don't allow ownership change
+          define_method(:owner_id) do
+            id
+          end
+        else
+          define_method(:owner_id) do
+            read_attribute(attr.id)
+          end
+          define_method("owner_id=") do |new_value|
+            write_attribute(attr.id,new_value)
+          end
+        end
       end
       include Ownership 
+    end
+
+    # If declared, the accessor used to create this object automatically
+    # becomes its owner.
+    # 
+    # Examples:
+    #
+    # class Comment < ActiveRecord::Base
+    #   belongs_to :member
+    #   has_owner :member
+    #   autosets_owner_on_create
+    #   authenticates_saves :with => :allow_owner
+    # end
+    #
+    def autosets_owner_on_create
+      has_owner # this will do nothing if the user has already set up has_owner :something
+      before_save :autoset_owner
     end
 
     # Used to specify that a given attribute should only be written to if the
@@ -115,6 +151,21 @@ module AuthenticatesAccess
     # Shorthand to get at the accessor of interest
     def accessor
       self.class.accessor
+    end
+
+    def bypass_auth
+      @bypass_auth = 1
+      yield
+      @bypass_auth = 0
+    end
+
+    # Auto-set the owner id to the accessor id before save if the object is new
+    def autoset_owner
+      if new_record?
+        bypass_auth do
+          self.owner_id = accessor.id
+        end
+      end
     end
 
     # Run a method on the accessor if it's available, otherwise return false.
@@ -180,7 +231,7 @@ module AuthenticatesAccess
     def write_attribute(name, value)
       # Simply check if the accessor is allowed to write the field
       # (if so, go to superclass and do it)
-      if allowed_to_write(name)
+      if allowed_to_write(name) || @bypass_auth
         super(name, value)
       end
     end

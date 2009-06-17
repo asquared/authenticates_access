@@ -11,7 +11,10 @@ the accessed objects to determine whether certain actions should be allowed.
 Example
 =======
 
-Models need to define the access restrictions which will apply:
+Models need to define the access restrictions which will apply. If the concept
+of "ownership" is to be used, it is necessary to define which attribute 
+refers to the object's owner. The owner should fill the role of accessor
+in the application.
 
 class User < ActiveRecord::Base
   # user has an is_admin attribute
@@ -22,11 +25,13 @@ class User < ActiveRecord::Base
   # allow users to save their own profile
   authenticates_saves :with => :allow_owner
 
-  # this is a bit ugly for now, but only in this one specific case
-  include AuthenticatesAccess::Ownership
-  def owner_id
-    id
-  end
+  # allow admins to save the profile as well
+  authenticates_saves :with_accessor_method => :is_admin
+
+  # note that ownership doesn't confer all privileges!
+  # has_owner :self means that the accessor's ID will be compared
+  # with this object's own ID for the allow_owner test.
+  has_owner :self
 
   # also, allow admins to save any user profile
   authenticates_saves :with_accessor_method => :is_admin 
@@ -36,10 +41,19 @@ class Comment < ActiveRecord::Base
   belongs_to :user
 
   # allow users to edit their own comments (but not others)
+
+  # has_owner :user means that user.id will be compared to accessor.id
+  # for the allow_owner test to pass.
   has_owner :user
+  
+  # register the ownership test for any saves
   authenticates_saves :with => :allow_owner
+
   # this will also allow admins to edit any comments
   authenticates_saves :with_accessor_method => :is_admin
+
+  # this makes the creating user the owner of the comment
+  autosets_owner_on_create
 end
 
 The application controller should set an accessor to be used:

@@ -102,7 +102,8 @@ module AuthenticatesAccess
     #
     def autosets_owner_on_create
       has_owner # this will do nothing if the user has already set up has_owner :something
-      before_save :autoset_owner
+      # the hook runs before validation so we can validate_associated
+      before_validation_on_create :autoset_owner
     end
 
     # Used to specify that a given attribute should only be written to if the
@@ -161,10 +162,8 @@ module AuthenticatesAccess
 
     # Auto-set the owner id to the accessor id before save if the object is new
     def autoset_owner
-      if new_record?
-        bypass_auth do
-          self.owner_id = accessor.id
-        end
+      bypass_auth do
+        self.owner_id = accessor.id
       end
     end
 

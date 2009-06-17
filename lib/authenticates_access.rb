@@ -1,6 +1,22 @@
 # AuthenticatesAccess
 
 module AuthenticatesAccess
+  class AuthMethod < Struct.new(:type, :name, :options)
+  end
+
+  class AuthMethodList < Array
+    def add_method(options)
+      if options[:with_accessor_method]
+        self << AuthMethod( :accessor, options[:with_accessor_method], options )
+      elsif options[:with]
+        self << AuthMethod( :model, options[:with], options )
+      else
+        fail "Either :with or :with_accessor_method must be specified"
+      end
+    end
+  end
+
+  
   module ClassMethods
     # Set an accessor to be used
     def accessor=(accessor)
@@ -33,19 +49,47 @@ module AuthenticatesAccess
     #   method returns true
     #
     def authenticates_saves(options={})
-      authenticates_access
-      @save_method_list ||= []
-      
-      if options[:with_accessor_method]
-        @save_method_list << [ :accessor_method, options[:with_accessor_method] ]
-      elsif options[:with]
-        @save_method_list << [ :local_method, options[:with] ]
-      else
-        fail "Either :with or :with_accessor_method must be specified"
+      unless @save_method_list
+        authenticates_access
+        before_save :auth_save_filter
+        before_destroy :auth_save_filter
+        @save_method_list = AuthMethodList.new
       end
 
-      before_save :auth_save_filter
-      before_destroy :auth_save_filter
+      @save_method_list.add_method(options)      
+    end
+    
+    # Used to specify that a given attribute should only be written to if the
+    # accessor passes a test. The test may be a method of the accessor or
+    # of the object itself, which should return a boolean value.. If the test 
+    # fails, the attribute write will be ignored. Multiple calls build up
+    # a chain of tests: if any test in the chain passes, the accessor is
+    # considered authorized.
+    #
+    # Examples:
+    #
+    # authenticates_writes_to :is_admin, :with_accessor_method => :is_admin
+    #   would only allow admins to grant or revoke the admin privileges of others
+    #
+    # authenticates_writes_to :title, :with => :allow_owner
+    #   would only allow the owner of this object to edit its title
+    #
+    def authenticates_writes_to(attr, options={})
+      authenticates_access
+      @write_validation_map ||= {}
+      @write_validation_map[attr.to_s] ||= AuthMethodList.new
+      @write_validation_map[attr.to_s].add_method(options)
+    end
+
+    # You might use this one to only allow authenticated users to create objects
+    def authenticates_creation(options={})
+      unless @create_method_list
+        authenticates_access
+        before_create :auth_create_filter
+        @create_method_list = AuthMethodList.new
+      end
+
+      @create_method_list.add_method(options)
     end
 
     # Used to specify that a given attribute represents an accessor that is
@@ -107,34 +151,6 @@ module AuthenticatesAccess
       before_validation_on_create :autoset_owner
     end
 
-    # Used to specify that a given attribute should only be written to if the
-    # accessor passes a test. The test may be a method of the accessor or
-    # of the object itself, which should return a boolean value.. If the test 
-    # fails, the attribute write will be ignored. Multiple calls build up
-    # a chain of tests: if any test in the chain passes, the accessor is
-    # considered authorized.
-    #
-    # Examples:
-    #
-    # authenticates_writes_to :is_admin, :with_accessor_method => :is_admin
-    #   would only allow admins to grant or revoke the admin privileges of others
-    #
-    # authenticates_writes_to :title, :with => :allow_owner
-    #   would only allow the owner of this object to edit its title
-    #
-    def authenticates_writes_to(attr, options={})
-      authenticates_access
-      @write_validation_map ||= {}
-      @write_validation_map[attr.to_s] ||= []
-      
-      if options[:with_accessor_method]
-        @write_validation_map[attr.to_s] << [ :accessor_method, options[:with_accessor_method] ]
-      elsif options[:with]
-        @write_validation_map[attr.to_s] << [ :local_method, options[:with] ]
-      else
-        fail "Either :with or :with_accessor_method must be specified"
-      end
-    end
 
     def authenticates_saves_method_list
       @save_method_list ||= nil
@@ -190,14 +206,14 @@ module AuthenticatesAccess
 
       # This is slightly on cocaine and probably should be using Struct instead of arrays
       validation_methods.each do |method|
-        if method[0] == :accessor_method
+        if method.type == :accessor
           # check the accessor using the given method
-          if run_accessor_method(method[1])
+          if run_accessor_method(method.name.to_sym)
             passed = true
           end
-        elsif method[0] == :local_method
+        elsif method.type == :model
           # call a method on this object directly
-          if self.send(method[1])
+          if self.send(method.name.to_sym)
             passed = true
           end
         else

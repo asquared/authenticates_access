@@ -7,9 +7,9 @@ module AuthenticatesAccess
   class AuthMethodList < Array
     def add_method(options)
       if options[:with_accessor_method]
-        self << AuthMethod( :accessor, options[:with_accessor_method], options )
+        self << AuthMethod.new( :accessor, options[:with_accessor_method], options )
       elsif options[:with]
-        self << AuthMethod( :model, options[:with], options )
+        self << AuthMethod.new( :model, options[:with], options )
       else
         fail "Either :with or :with_accessor_method must be specified"
       end
@@ -87,6 +87,7 @@ module AuthenticatesAccess
         authenticates_access
         before_create :auth_create_filter
         @create_method_list = AuthMethodList.new
+        extend CreationControl
       end
 
       @create_method_list.add_method(options)
@@ -116,17 +117,22 @@ module AuthenticatesAccess
     #
     def has_owner(attr=nil)
       unless attr.nil?
+        id_accessor = "#{attr.to_s}_id"
+        id_mutator = "#{attr.to_s}_id="
         if attr == :self
           # special case the self attribute but don't allow ownership change
           define_method(:owner_id) do
             id
           end
         else
+          define_method(:owner) do
+            self.send(attr)
+          end
           define_method(:owner_id) do
-            read_attribute(attr.id)
+            self.send(id_accessor)
           end
           define_method("owner_id=") do |new_value|
-            write_attribute(attr.id,new_value)
+            self.send(id_mutator,new_value)
           end
         end
       end
@@ -184,14 +190,20 @@ module AuthenticatesAccess
       bypass_auth do
         self.owner_id = accessor.id
       end
+
+      true # this is very important!
     end
 
     # Run a method on the accessor if it's available, otherwise return false.
-    def run_accessor_method(method)
+    def run_accessor_method(method, options)
       if accessor.nil?
         false
       elsif accessor.respond_to?(method)
-        accessor.send(method)
+        if options
+          accessor.send(method, options)
+        else
+          accessor.send(method)
+        end
       else
         false
       end
@@ -207,14 +219,20 @@ module AuthenticatesAccess
       # This is slightly on cocaine and probably should be using Struct instead of arrays
       validation_methods.each do |method|
         if method.type == :accessor
-          # check the accessor using the given method
-          if run_accessor_method(method.name.to_sym)
+          # check the accessor using the given method and options
+          if run_accessor_method(method.name.to_sym, method.options[:options])
             passed = true
           end
         elsif method.type == :model
-          # call a method on this object directly
-          if self.send(method.name.to_sym)
-            passed = true
+          # call a method on this object directly, passing the options hash if we have it
+          if method.options[:options]
+            if self.send(method.name.to_sym, method.options[:options])
+              passed = true
+            end
+          else
+            if self.send(method.name.to_sym)
+              passed = true
+            end
           end
         else
           fail "Invalid access check type"
@@ -227,7 +245,18 @@ module AuthenticatesAccess
     def auth_save_filter
       if not allowed_to_save
         # An interesting thought: could this throw an HTTP error?
-        fail "Unauthorized access was attempted"
+        false
+      else
+        true
+      end
+    end
+    
+    # before_save/before_destroy hook installed by authenticates_saves
+    def auth_create_filter
+      if not self.class.allowed_to_create
+        false
+      else
+        true
       end
     end
 
@@ -277,13 +306,35 @@ module AuthenticatesAccess
 
   module Ownership
     # This method implements a simple test: whether the object is owned by 
-    # the accessor. See has_owner in ClassMethods.
-    def allow_owner
-      if accessor.nil?
-        false
+    # the accessor. See has_owner in ClassMethods. Note that new records,
+    # with no owner, will always pass this test. This allows the 
+    # (not-yet-existent) owner (i.e. the creator) to write any attributes 
+    # that they would have had access to anyway. Use authenticates_creation
+    # to allow only certain accessors the right to create objects.
+    def allow_owner(options={})
+      if new_record?
+        true
+      elsif accessor.nil?
+        false # maybe this is failing up the works?
       else
         # must define an owner_id method for this to work
         accessor.id == owner_id
+      end
+    end
+  end
+
+  module CreationControl
+    def allowed_to_create
+      method_list = @create_method_list
+      if method_list.nil?
+        # No method list, so it's allowed
+        true
+      elsif check_method_list(method_list)
+        # Method list passed, so allowed
+        true
+      else
+        # Method list failed, so denied
+        false
       end
     end
   end

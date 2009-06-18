@@ -8,7 +8,7 @@ item2:
 
 item3:
   user_id: 3
-  description: "I'm owned by creator"
+  description: "I'm owned by user1"
 
 item4: 
   user_id: 4

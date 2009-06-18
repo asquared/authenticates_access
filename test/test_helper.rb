@@ -25,7 +25,7 @@ ActiveRecord::Base.configurations = YAML::load(File.open(File.join(root_dir, 'da
 # bring up some database stuff
 ActiveRecord::Base.establish_connection({
   :adapter => 'sqlite3',
-  :dbfile => 'test.db'
+  :dbfile => ':memory:'
 })
 
 def build_schema

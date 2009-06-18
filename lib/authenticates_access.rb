@@ -30,47 +30,6 @@ module AuthenticatesAccess
       end
       passed
     end
-    # Checks the list against the specified accessor and model.
-    def check_accessor_and_model(accessor, model)
-      # start out assuming we have not passed any tests
-      # if one passes this gets set to true
-      passed = false
-
-      self.each do |method|
-        if method.type == :accessor
-          # check the accessor using the given method and options
-          if run_method(accessor, method.name.to_sym, method.options[:options])
-            passed = true
-          end
-        elsif method.type == :model
-          if run_method(model, method.name.to_sym, method.options[:options])
-            passed = true
-          end
-        else
-          fail "Invalid access check type"
-        end
-      end
-      passed
-    end
-
-    # Checks the list against the specified accessor, ignoring model checks.
-    # Unfortnately not very DRY, but having two explicit methods may be clearer?
-    # This can actually be generalized to check :whatever => object, :whatever_else => ...
-    def check_accessor(accessor)
-      # start out assuming we have not passed any tests
-      # if one passes this gets set to true
-      passed = false
-
-      self.each do |method|
-        if method.type == :accessor
-          # check the accessor using the given method and options
-          if run_method(accessor, method.name.to_sym, method.options[:options])
-            passed = true
-          end
-        end
-      end
-      passed
-    end
     
     protected
 
@@ -128,7 +87,9 @@ module AuthenticatesAccess
     # Used to require an authentication test to be passed on the accessor
     # before the model may be saved or destroyed. If the test fails, an exception
     # will be thrown. Multiple calls build a chain of tests. If any test
-    # passes, the accessor is considered authenticated.
+    # passes, the accessor is considered authenticated. Attribute writes will
+    # also be disallowed if the object may not be saved by the accessor
+    # 
     # examples:
     #
     # authenticates_saves :with_accessor_method => :is_admin
@@ -335,16 +296,21 @@ module AuthenticatesAccess
     # This method may be used to determine if the current accessor may write
     # to a given attribute. Returns true if so, false otherwise.
     def allowed_to_write(name)
-      name = name.to_s
-      validation_methods = self.class.write_validations(name)  
-      if validation_methods.nil?
-        # We haven't registered any filters on this attribute, so allow the write.
-        true
-      elsif validation_methods.check :accessor => accessor, :model => self
-        # One of the authentication methods worked, so allow the write.
-        true
+      # no point allowing attribute writes if we can't save them?
+      if allowed_to_save
+        name = name.to_s
+        validation_methods = self.class.write_validations(name)  
+        if validation_methods.nil?
+          # We haven't registered any filters on this attribute, so allow the write.
+          true
+        elsif validation_methods.check :accessor => accessor, :model => self
+          # One of the authentication methods worked, so allow the write.
+          true
+        else
+          # We had filters but none of them passed. Disallow write.
+          false
+        end
       else
-        # We had filters but none of them passed. Disallow write.
         false
       end
     end

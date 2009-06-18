@@ -1,0 +1,23 @@
+admin:
+  id: 1
+  name: The Administrator
+  is_admin: true
+  bio: I like writing code and doing other things
+
+admin2:
+  id: 2
+  name: Another Administrator
+  is_admin: true
+  bio: I am also an administrator
+
+user1:
+  id: 3
+  name: User 1
+  is_admin: false
+  bio: I own some things but not others
+
+user2:
+  id: 4
+  name: User 2
+  is_admin: false
+  bio: I am like user 1

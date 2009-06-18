@@ -14,6 +14,97 @@ module AuthenticatesAccess
         fail "Either :with or :with_accessor_method must be specified"
       end
     end
+
+    def check(targets)
+      # start out assuming we have not passed any tests
+      # if one passes this gets set to true
+      passed = false
+
+      self.each do |method|
+        unless targets[method.type].nil?
+          target = targets[method.type]
+          if run_method(target, method.name.to_sym, method.options[:options])
+            passed = true
+          end
+        end
+      end
+      passed
+    end
+    # Checks the list against the specified accessor and model.
+    def check_accessor_and_model(accessor, model)
+      # start out assuming we have not passed any tests
+      # if one passes this gets set to true
+      passed = false
+
+      self.each do |method|
+        if method.type == :accessor
+          # check the accessor using the given method and options
+          if run_method(accessor, method.name.to_sym, method.options[:options])
+            passed = true
+          end
+        elsif method.type == :model
+          if run_method(model, method.name.to_sym, method.options[:options])
+            passed = true
+          end
+        else
+          fail "Invalid access check type"
+        end
+      end
+      passed
+    end
+
+    # Checks the list against the specified accessor, ignoring model checks.
+    # Unfortnately not very DRY, but having two explicit methods may be clearer?
+    # This can actually be generalized to check :whatever => object, :whatever_else => ...
+    def check_accessor(accessor)
+      # start out assuming we have not passed any tests
+      # if one passes this gets set to true
+      passed = false
+
+      self.each do |method|
+        if method.type == :accessor
+          # check the accessor using the given method and options
+          if run_method(accessor, method.name.to_sym, method.options[:options])
+            passed = true
+          end
+        end
+      end
+      passed
+    end
+    
+    protected
+
+    # Run a method on the object if it's available, otherwise return false.
+    def run_method(object, method, options)
+      if object.nil?
+        false
+      elsif object.respond_to?(method)
+        if options
+          object.send(method, options)
+        else
+          object.send(method)
+        end
+      else
+        false
+      end
+    end
+
+    # Run a method on the object if it's available, otherwise return false.
+    # If the object itself is nil, return true. Used only by 
+    # YourModel.allowed_to_create, because we don't actually have a model yet
+    def run_method_or_allow(object, method, options)
+      if object.nil?
+        true
+      elsif object.respond_to?(method)
+        if options
+          object.send(method, options)
+        else
+          object.send(method)
+        end
+      else
+        false
+      end
+    end
   end
 
   
@@ -194,52 +285,7 @@ module AuthenticatesAccess
       true # this is very important!
     end
 
-    # Run a method on the accessor if it's available, otherwise return false.
-    def run_accessor_method(method, options)
-      if accessor.nil?
-        false
-      elsif accessor.respond_to?(method)
-        if options
-          accessor.send(method, options)
-        else
-          accessor.send(method)
-        end
-      else
-        false
-      end
-    end
 
-    # Checks a list of authentication methods specified by the class methods above.
-    # Returns true if the test passes, false if not.
-    def check_method_list(validation_methods)
-      # start out assuming we have not passed any tests
-      # if one passes this gets set to true
-      passed = false
-
-      # This is slightly on cocaine and probably should be using Struct instead of arrays
-      validation_methods.each do |method|
-        if method.type == :accessor
-          # check the accessor using the given method and options
-          if run_accessor_method(method.name.to_sym, method.options[:options])
-            passed = true
-          end
-        elsif method.type == :model
-          # call a method on this object directly, passing the options hash if we have it
-          if method.options[:options]
-            if self.send(method.name.to_sym, method.options[:options])
-              passed = true
-            end
-          else
-            if self.send(method.name.to_sym)
-              passed = true
-            end
-          end
-        else
-          fail "Invalid access check type"
-        end
-      end
-      passed
-    end
 
     # before_save/before_destroy hook installed by authenticates_saves
     def auth_save_filter
@@ -267,7 +313,7 @@ module AuthenticatesAccess
       if method_list.nil?
         # No method list, so it's allowed
         true
-      elsif check_method_list(method_list)
+      elsif method_list.check :accessor => accessor, :model => self
         # Method list passed, so allowed
         true
       else
@@ -294,7 +340,7 @@ module AuthenticatesAccess
       if validation_methods.nil?
         # We haven't registered any filters on this attribute, so allow the write.
         true
-      elsif check_method_list(validation_methods)
+      elsif validation_methods.check :accessor => accessor, :model => self
         # One of the authentication methods worked, so allow the write.
         true
       else
@@ -329,7 +375,7 @@ module AuthenticatesAccess
       if method_list.nil?
         # No method list, so it's allowed
         true
-      elsif check_method_list(method_list)
+      elsif method_list.check :accessor => accessor
         # Method list passed, so allowed
         true
       else

@@ -1,0 +1,16 @@
+item1:
+  user_id: 1
+  description: "I'm owned by the admin"
+
+item2:
+  user_id: 2
+  description: "I'm owned by the other admin"
+
+item3:
+  user_id: 3
+  description: "I'm owned by creator"
+
+item4: 
+  user_id: 4
+  description: "I'm owned by user2"
+

@@ -48,22 +48,6 @@ module AuthenticatesAccess
       end
     end
 
-    # Run a method on the object if it's available, otherwise return false.
-    # If the object itself is nil, return true. Used only by 
-    # YourModel.allowed_to_create, because we don't actually have a model yet
-    def run_method_or_allow(object, method, options)
-      if object.nil?
-        true
-      elsif object.respond_to?(method)
-        if options
-          object.send(method, options)
-        else
-          object.send(method)
-        end
-      else
-        false
-      end
-    end
   end
 
   

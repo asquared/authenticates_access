@@ -49,10 +49,11 @@ def build_schema
 
 end
 
-# why should this need to go here?
-ActiveSupport::TestCase.fixture_path = "#{root_dir}/fixtures"
-
 class ActiveSupport::TestCase
+  def self.fixture_path
+    File.join(File.dirname(__FILE__), "fixtures")
+  end
+
   build_schema
 
   self.use_transactional_fixtures = true

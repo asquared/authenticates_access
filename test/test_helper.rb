@@ -50,7 +50,7 @@ def build_schema
 end
 
 # why should this need to go here?
-ActiveSupport::TestCase.fixture_path = "/var/rails/eclub/vendor/plugins/authenticates_access/test/fixtures"
+ActiveSupport::TestCase.fixture_path = "#{root_dir}/fixtures"
 
 class ActiveSupport::TestCase
   build_schema

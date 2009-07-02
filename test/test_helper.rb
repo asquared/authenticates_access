@@ -50,9 +50,10 @@ def build_schema
 end
 
 class ActiveSupport::TestCase
-  def self.fixture_path
-    File.join(File.dirname(__FILE__), "fixtures")
-  end
+  # 2.3.2 seems to need this?
+  include ActiveRecord::TestFixtures
+
+  self.fixture_path = File.join(File.dirname(__FILE__), "fixtures")
 
   build_schema
 

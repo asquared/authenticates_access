@@ -88,4 +88,21 @@ class AuthenticatesAccessTest < ActiveSupport::TestCase
     flunk if owned_items(:item4).allowed_to_save
   end
     
+  test "can_create_but_not_change_owner" do
+    ActiveRecord::Base.accessor = users(:user1)
+    flunk if ActiveRecord::Base.accessor.is_admin
+    created = CreatedItem.new(:description => "something")
+    assert created.save
+    assert created.owner_id == users(:user1).id
+    created.owner_id = 1234
+    assert created.owner_id == users(:user1).id
+  end
+
+  test "admin_can_set_owner" do
+    ActiveRecord::Base.accessor = users(:admin)
+    created = CreatedItem.new(:description => "something")
+    created.owner_id = users(:user1).id
+    assert created.save
+    assert created.owner_id == users(:user1).id
+  end
 end

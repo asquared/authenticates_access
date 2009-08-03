@@ -224,7 +224,9 @@ module AuthenticatesAccess
     # Auto-set the owner id to the accessor id before save if the object is new
     def autoset_owner
       bypass_auth do
-        self.owner_id = accessor.id
+        if accessor
+          self.owner_id ||= accessor.id
+        end
       end
 
       true # this is very important!
@@ -297,6 +299,11 @@ module AuthenticatesAccess
       else
         false
       end
+    end
+
+    # for now, if you can save, you can destroy
+    def allowed_to_destroy      
+      allowed_to_save
     end
   end
 

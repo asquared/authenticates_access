@@ -45,6 +45,11 @@ def build_schema
     create_table "admin_items", :force => true do |t|
       t.column "description", :text
     end
+
+    create_table "created_items", :force => true do |t|
+      t.column "user_id", :integer
+      t.column "description", :text
+    end
   end
 
 end
